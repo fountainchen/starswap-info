@@ -1,10 +1,11 @@
 package org.starcoin.indexer.handler;
 
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.novi.serde.DeserializationError;
-import com.thetransactioncompany.jsonrpc2.client.JSONRPC2SessionException;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.quartz.DisallowConcurrentExecution;
 import org.quartz.JobExecutionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,7 @@ import org.starcoin.bean.*;
 import org.starcoin.bean.Transaction;
 import org.starcoin.constant.Constant;
 import org.starcoin.constant.StarcoinNetwork;
+import org.starcoin.indexer.service.OffsetService;
 import org.starcoin.indexer.service.SwapTxnService;
 import org.starcoin.types.*;
 import org.starcoin.types.StructTag;
@@ -26,30 +28,31 @@ import org.starcoin.utils.*;
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+@DisallowConcurrentExecution
+public class SwapTransactionHandle extends QuartzJobBean {
 
-public class TransactionPayloadHandle extends QuartzJobBean {
-
-    private static final Logger logger = LoggerFactory.getLogger(TransactionPayloadHandle.class);
+    private static final String SWAP_TXN_OFFSET_KEY ="SWAP_TXN_";
+    private static final String SWAP_MODULE ="0x8c109349c6bd91411d6bc962e080c4a3::TokenSwapFarmScript";
+    private static final Logger logger = LoggerFactory.getLogger(SwapTransactionHandle.class);
     private ObjectMapper objectMapper;
-    private RestHighLevelClient client;
-    private String index;
-
     @Value("${starcoin.network}")
     private String network;
     private StarcoinNetwork localNetwork;
-    @Autowired
-    private ElasticSearchHandler elasticSearchHandler;
     @Autowired
     private StateRPCClient stateRPCClient;
     @Autowired
     private SwapTxnService swapTxnService;
     @Autowired
     private SwapApiClient swapApiClient;
-
+    @Autowired
+    private OffsetService offsetService;
+    @Autowired
+    private MoveScanClient moveScanClient;
     @PostConstruct
     public void init() {
         objectMapper = new ObjectMapper();
@@ -67,11 +70,6 @@ public class TransactionPayloadHandle extends QuartzJobBean {
         module.addSerializer(ModuleId.class, new ModuleIdSerializer());
 
         objectMapper.registerModule(module);
-        //init client and index
-        if (elasticSearchHandler != null) {
-            client = elasticSearchHandler.getClient();
-        }
-        index = ServiceUtils.getIndex(network, Constant.PAYLOAD_INDEX);
         //init network
         if (localNetwork == null) {
             localNetwork = StarcoinNetwork.fromValue(network);
@@ -80,34 +78,53 @@ public class TransactionPayloadHandle extends QuartzJobBean {
 
     @Override
     protected void executeInternal(JobExecutionContext jobExecutionContext) {
-        if (client == null) {
+        if (localNetwork == null) {
             init();
         }
-        TransferOffset transactionPayloadRemoteOffset = ServiceUtils.getRemoteOffset(client, index);
-        logger.info("handle txn payload: {}", transactionPayloadRemoteOffset);
-        if (transactionPayloadRemoteOffset == null) {
-            //init offset
-            transactionPayloadRemoteOffset = new TransferOffset();
-            transactionPayloadRemoteOffset.setTimestamp("0");
-            transactionPayloadRemoteOffset.setOffset(0);
-            ServiceUtils.setRemoteOffset(client, index, transactionPayloadRemoteOffset);
-            logger.info("offset not init, init ok!");
-        }
+        long offset = offsetService.getOffset(network, SWAP_TXN_OFFSET_KEY + network);
+        logger.info("handle swap txn: {}", offset);
+
         try {
-            List<Transaction> transactionList = elasticSearchHandler.getTransactionByGlobalIndex(transactionPayloadRemoteOffset.getOffset());
-            if (!transactionList.isEmpty()) {
+            List<TransactionEntity> transactionEntityList = moveScanClient.getSwapTxn(offset, 50);
+            if (!transactionEntityList.isEmpty()) {
                 List<SwapTransaction> swapTransactionList = new ArrayList<>();
-                elasticSearchHandler.addUserTransactionToList(transactionList);
-                long globalIndex = elasticSearchHandler.bulkAddPayload(index, transactionList, objectMapper, swapTransactionList);
-                //add es success and add swap txn
-                if (!swapTransactionList.isEmpty()) {
-                    Map<String, BigDecimal> tokenPriceMap = new HashMap<>();
-                    for (SwapTransaction swapTransaction : swapTransactionList) {
+                Map<String, BigDecimal> tokenPriceMap = new HashMap<>();
+                long globalIndex = 0;
+                for (TransactionEntity entity: transactionEntityList) {
+                    JSONObject jb = JSONObject.parseObject(entity.getPayload());
+                    JSONObject scripts = jb.getJSONObject("ScriptFunction");
+                    String module = String.valueOf(scripts.get("module"));
+                    if(SWAP_MODULE.equals(module) ) {
+                        SwapTransaction swapTransaction = new SwapTransaction();
                         List<String> tokenList = new ArrayList<>();
-                        tokenList.add(swapTransaction.getTokenA());
-                        tokenList.add(swapTransaction.getTokenB());
-                        swapTransaction.setAmountA(ServiceUtils.divideScalingFactor(stateRPCClient, swapTransaction.getTokenA(), swapTransaction.getAmountA()));
-                        swapTransaction.setAmountB(ServiceUtils.divideScalingFactor(stateRPCClient, swapTransaction.getTokenB(), swapTransaction.getAmountB()));
+                        globalIndex = entity.getGlobalIndex();
+                        UserTransactionEntity userTransactionEntity = moveScanClient.getUserTxn(entity.getTxnHash());
+                        if(userTransactionEntity != null) {
+                            swapTransaction.setAccount(userTransactionEntity.getSender());
+                        }
+                        swapTransaction.setTransactionHash(entity.getTxnHash());
+                        swapTransaction.setTimestamp(entity.getCreateAt());
+                        JSONArray typeArray = scripts.getJSONArray("ty_args");
+                        String tokenA =  String.valueOf(typeArray.get(0));
+                        String tokenB =  String.valueOf(typeArray.get(1));
+                        swapTransaction.setTokenA(tokenA);
+                        swapTransaction.setTokenB(tokenB);
+                        SwapType swapType = SwapType.fromValue(String.valueOf(scripts.get("function")));
+                        JSONArray argsArray = scripts.getJSONArray("args");
+                        BigInteger argFirst = argsArray.getBigInteger(0);
+                        BigInteger argSecond = new BigInteger("0");
+                        if(swapType == SwapType.RemoveLiquidity) {
+                            argFirst = argsArray.getBigInteger(1);
+                            argSecond = argsArray.getBigInteger(2);
+                        }else if(swapType == SwapType.Stake) {
+                        }else {
+                            argSecond = argsArray.getBigInteger(1);
+                        }
+                        swapTransaction.setSwapType(swapType);
+                        tokenList.add(tokenA);
+                        tokenList.add(tokenB);
+                        swapTransaction.setAmountA(ServiceUtils.divideScalingFactor(stateRPCClient, swapTransaction.getTokenA(), new BigDecimal(argFirst)));
+                        swapTransaction.setAmountB(ServiceUtils.divideScalingFactor(stateRPCClient, swapTransaction.getTokenB(), new BigDecimal(argSecond)));
                         boolean isSwap = SwapType.isSwap(swapTransaction.getSwapType());
                         BigDecimal value = getTotalValue(tokenPriceMap, swapTransaction.getTokenA(), swapTransaction.getAmountA(),
                                 swapTransaction.getTokenB(), swapTransaction.getAmountB(), isSwap);
@@ -183,28 +200,25 @@ public class TransactionPayloadHandle extends QuartzJobBean {
                                 }
                             }
                         }
+                        swapTransactionList.add(swapTransaction);
                     }
-
-                    try {
-                        swapTxnService.saveList(swapTransactionList);
-                        logger.info("save swap txn ok: {}", swapTransactionList.size());
-                    } catch (Exception e) {
-                       logger.error("save swap err:", e);
-                    }
-
                 }
-                //update offset
-                Transaction last = transactionList.get(transactionList.size() - 1);
-                TransferOffset currentOffset = new TransferOffset();
-                currentOffset.setTimestamp(String.valueOf(last.getTimestamp()));
-                currentOffset.setOffset(globalIndex);
-                ServiceUtils.setRemoteOffset(client, index, currentOffset);
-                logger.info("update payload ok: {}", currentOffset);
+
+                //save swap transaction
+                try {
+                    swapTxnService.saveList(swapTransactionList);
+                    logger.info("save swap txn ok: {}", swapTransactionList.size());
+                    //update offset
+                    offsetService.updateOffset(network, SWAP_TXN_OFFSET_KEY+ network, globalIndex);
+                    logger.info("update payload ok: {}", globalIndex);
+                } catch (Exception e) {
+                    logger.error("save swap err:", e);
+                }
             } else {
                 logger.warn("get txn_info null");
             }
 
-        } catch (IOException | DeserializationError | JSONRPC2SessionException e) {
+        } catch (IOException e) {
             logger.warn("handle transaction payload error:", e);
         }
     }

@@ -1,4 +1,4 @@
-name: Build ScanAPI Docker and deploy
+name: Build backend Docker and deploy
 on:
   push:
     branches:
@@ -8,10 +8,10 @@ on:
     types: [ published ]
 defaults:
   run:
-    working-directory: starcoin-scan-api
+    working-directory: starcoin-backend
 jobs:
   build-starcoin-docker:
-    name: build starcoin-scan-api docker
+    name: build starcoin-backend docker
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,7 +22,7 @@ jobs:
         id: docker_meta
         uses: crazy-max/ghaction-docker-meta@v1
         with:
-          images: starcoin/starcoin_scan,ghcr.io/starcoinorg/starcoin_scan
+          images: fountainchen/starswap_info_backend,ghcr.io/fountainchen/starswap_info_backend
           tag-sha: true
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1.6.0
@@ -42,14 +42,14 @@ jobs:
       - name: maven-settings-xml-action
         uses: whelk-io/maven-settings-xml-action@v18
         with:
-          repositories: '[{ "id": "github", "url": "https://maven.pkg.github.com/starcoinorg/*" }]'
+          repositories: '[{ "id": "github", "url": "https://maven.pkg.github.com/fountainchen/*" }]'
           servers: '[{ "id": "github", "username": "${{ github.actor }}", "password": "${{ secrets.GIT_PACKAGE_TOKEN }}" }]'
           output_file: settings.xml
       - name: Build and push
         uses: docker/build-push-action@v2.7.0
         with:
           context: .
-          file: starcoin-scan-api/deploy/Dockerfile
+          file: starcoin-indexer/deploy/Dockerfile
           push: true
           tags: ${{ steps.docker_meta.outputs.tags }}
           labels: ${{ steps.docker_meta.outputs.labels }}

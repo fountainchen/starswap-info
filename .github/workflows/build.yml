@@ -5,9 +5,6 @@ on:
       - main
   pull_request:
     types: [ opened, synchronize, reopened ]
-defaults:
-  run:
-    working-directory: .
 jobs:
   build:
     name: Build
@@ -23,7 +20,7 @@ jobs:
       - name: maven-settings-xml-action
         uses: whelk-io/maven-settings-xml-action@v18
         with:
-          repositories: '[{ "id": "github", "url": "https://maven.pkg.github.com/starcoinorg/*" }]'
+          repositories: '[{ "id": "github", "url": "https://maven.pkg.github.com/founainchen/*" }]'
           servers: '[{ "id": "github", "username": "${{ github.actor }}", "password": "${{ secrets.GIT_PACKAGE_TOKEN }}" }]'
       - name: Cache Maven packages
         uses: actions/cache@v1

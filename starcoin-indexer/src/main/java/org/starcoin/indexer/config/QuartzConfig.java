@@ -23,65 +23,17 @@ public class QuartzConfig {
     private SearchJobFactory searchJobFactory;
 
     @Bean
-    public JobDetail indexerJob() {
-        return JobBuilder.newJob(IndexerHandle.class).withIdentity("indexer").storeDurably().build();
+    public JobDetail swapTransactionJob() {
+        return JobBuilder.newJob(SwapTransactionHandle.class).withIdentity("swap_transaction").storeDurably().build();
     }
 
     @Bean
-    public Trigger indexerTrigger() {
-        SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-                .withIntervalInSeconds(10)  //设置时间周期单位秒
-                .repeatForever();
-        return TriggerBuilder.newTrigger().forJob(indexerJob())
-                .withIdentity("indexer")
-                .withSchedule(scheduleBuilder)
-                .build();
-    }
-
-    @Bean
-    public JobDetail secondaryJob() {
-        return JobBuilder.newJob(SecondaryIndexer.class).withIdentity("secondary").storeDurably().build();
-    }
-
-    @Bean
-    public Trigger secondaryTrigger() {
-        SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-                .withIntervalInSeconds(10)  //设置时间周期单位秒
-                .repeatForever();
-        return TriggerBuilder.newTrigger().forJob(secondaryJob())
-                .withIdentity("secondary")
-                .withSchedule(scheduleBuilder)
-                .build();
-    }
-
-    @Bean
-    public JobDetail MarketCapJob() {
-        return JobBuilder.newJob(MarketCapIndexer.class).withIdentity("market_cap").storeDurably().build();
-    }
-
-    @Bean
-    public Trigger marketCapTrigger() {
-        SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-                .withIntervalInHours(24)
-                .repeatForever();
-        return TriggerBuilder.newTrigger().forJob(MarketCapJob())
-                .withIdentity("market_cap")
-                .withSchedule(scheduleBuilder)
-                .build();
-    }
-
-    @Bean
-    public JobDetail transactionPayloadJob() {
-        return JobBuilder.newJob(TransactionPayloadHandle.class).withIdentity("txn_payload").storeDurably().build();
-    }
-
-    @Bean
-    public Trigger transactionPayloadTrigger() {
+    public Trigger swapTransactionTrigger() {
         SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
                 .withIntervalInSeconds(10)
                 .repeatForever();
-        return TriggerBuilder.newTrigger().forJob(transactionPayloadJob())
-                .withIdentity("txn_payload")
+        return TriggerBuilder.newTrigger().forJob(swapTransactionJob())
+                .withIdentity("swap_transaction")
                 .withSchedule(scheduleBuilder)
                 .build();
     }
@@ -98,39 +50,6 @@ public class QuartzConfig {
                 .repeatForever();
         return TriggerBuilder.newTrigger().forJob(swapStatsJob())
                 .withIdentity("swap_stats")
-                .withSchedule(scheduleBuilder)
-                .build();
-    }
-
-    @Bean
-    public JobDetail cleanPendingTxnJob() {
-        return JobBuilder.newJob(PendingTxnCleanHandle.class).withIdentity("clean_pending_txn").storeDurably().build();
-    }
-
-    @Bean
-    public Trigger cleanPendingTxnTrigger() {
-        SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-                .withIntervalInSeconds(20)  //设置时间周期单位秒
-                .repeatForever();
-        return TriggerBuilder.newTrigger().forJob(cleanPendingTxnJob())
-                .withIdentity("clean_pending_txn")
-                .withSchedule(scheduleBuilder)
-                .build();
-    }
-
-    //txn global index update
-    @Bean
-    public JobDetail txnGlobalIndexUpdateJob() {
-        return JobBuilder.newJob(TransactionInfoIndexer.class).withIdentity("txn_global_idx_update").storeDurably().build();
-    }
-
-    @Bean
-    public Trigger txnGlobalIndexUpdateTrigger() {
-        SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-                .withIntervalInSeconds(2)  //设置时间周期单位秒
-                .repeatForever();
-        return TriggerBuilder.newTrigger().forJob(txnGlobalIndexUpdateJob())
-                .withIdentity("txn_global_idx_update")
                 .withSchedule(scheduleBuilder)
                 .build();
     }
@@ -237,33 +156,13 @@ public class QuartzConfig {
         Set<String> jobSet = new HashSet<>();
         Collections.addAll(jobSet, jobs);
 
-        JobDetail job = indexerJob();
+        JobDetail job  = swapTransactionJob();
         if (jobSet.contains(job.getKey().getName())) {
-            scheduler.scheduleJob(job, indexerTrigger());
-        }
-        job = secondaryJob();
-        if (jobSet.contains(job.getKey().getName())) {
-            scheduler.scheduleJob(job, secondaryTrigger());
-        }
-        job = MarketCapJob();
-        if (jobSet.contains(job.getKey().getName())) {
-            scheduler.scheduleJob(job, marketCapTrigger());
-        }
-        job = transactionPayloadJob();
-        if (jobSet.contains(job.getKey().getName())) {
-            scheduler.scheduleJob(job, transactionPayloadTrigger());
+            scheduler.scheduleJob(job, swapTransactionTrigger());
         }
         job = swapStatsJob();
         if (jobSet.contains(job.getKey().getName())) {
             scheduler.scheduleJob(job, swapStatsTrigger());
-        }
-        job = cleanPendingTxnJob();
-        if (jobSet.contains(job.getKey().getName())) {
-            scheduler.scheduleJob(job, cleanPendingTxnTrigger());
-        }
-        job = txnGlobalIndexUpdateJob();
-        if (jobSet.contains(job.getKey().getName())) {
-            scheduler.scheduleJob(job, txnGlobalIndexUpdateTrigger());
         }
         job = swapEventHandleJob();
         if (jobSet.contains(job.getKey().getName())) {
