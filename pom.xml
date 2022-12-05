@@ -10,7 +10,6 @@
     <version>1.1</version>
     <modules>
         <module>starcoin-commons</module>
-        <module>starcoin-scan-api</module>
         <module>starcoin-indexer</module>
     </modules>
 
