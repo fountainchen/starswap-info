@@ -17,31 +17,16 @@ spec:
     spec:
       containers:
         - name: starswap-info
-          image: starcoin/starcoin_indexer:sha-a66e9ab
+          image: fountainchen/starswap_info_backend:sha-30c9da0
           ports:
             - containerPort: 8300
           env:
             - name: HOSTS
               value: "main.seed.starcoin.org"
             - name: NETWORK
-              value: "main.0727"
+              value: "main"
             - name: BG_TASK_JOBS
-              value: "swap_stats,price_hour,price_stat,swap_pool_fee_stat"
-            - name: TXN_OFFSET
-              value: "0"
-            - name: STARCOIN_ES_PWD
-              valueFrom:
-                secretKeyRef:
-                  name: elasticsearch-pw-elastic
-                  key: password
-            - name: STARCOIN_ES_URL
-              value: "search-starcoin-es2-47avtmhexhbg7qtynzebcnnu64.ap-northeast-1.es.amazonaws.com"
-            - name: STARCOIN_ES_PROTOCOL
-              value: "https"
-            - name: STARCOIN_ES_PORT
-              value: "443"
-            - name: BULK_SIZE
-              value: "100"
+              value: "swap_transaction,swap_stats,price_hour,price_stat,swap_pool_fee_stat"
             - name: SWAP_API_URL
               value: "https://swap-api.starswap.xyz"
             - name: SWAP_CONTRACT_ADDR
@@ -57,5 +42,5 @@ spec:
                   key: password
             - name: DB_SCHEMA
               value: "main"
-            - name: PROGRAM_ARGS
-              value: ""
+            - name: MOVE_SCAN_API_URL
+              value: "https://api.movescan.org"

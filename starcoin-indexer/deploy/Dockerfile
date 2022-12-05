@@ -20,6 +20,7 @@ ARG DS_URL
 ARG DB_USER_NAME
 ARG DB_PWD
 ARG DB_SCHEMA
+ARG MOVE_SCAN_API_URL
 
 ENV HOSTS=$HOSTS
 ENV NETWORK=$NETWORK
@@ -30,6 +31,7 @@ ENV DS_URL=$DS_URL
 ENV DB_USER_NAME=$DB_USER_NAME
 ENV DB_PWD=$DB_PWD
 ENV DB_SCHEMA=$DB_SCHEMA
+ENV MOVE_SCAN_API_URL=$MOVE_SCAN_API_URL
 
 
 VOLUME /tmp
@@ -45,5 +47,6 @@ ENTRYPOINT ["java","-noverify","-jar","app/lib/indexer.jar", \
             "DS_URL=$DS_URL", \
             "DB_USER_NAME=$DB_USER_NAME", \
             "DB_PWD=$DB_PWD", \
+            "MOVE_SCAN_API_URL=$MOVE_SCAN_API_URL", \
             "DB_SCHEMA=$DB_SCHEMA" \
             ]
