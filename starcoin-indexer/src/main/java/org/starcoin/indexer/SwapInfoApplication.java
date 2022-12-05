@@ -31,7 +31,7 @@ public class SwapInfoApplication {
     @Bean(name = "base_url")
     URL baseUrl(@Value("${starcoin.seeds}") String host) {
         try {
-            return new URL("https://" + host + ":9850");
+            return new URL("http://" + host + ":9850");
         } catch (MalformedURLException e) {
             logger.error("get base url error:", e);
         }
@@ -78,7 +78,7 @@ public class SwapInfoApplication {
     MoveScanClient moveScanClient() {
         try {
             URL moveUrl = new URL(moveScanAPIUrl);
-            return new MoveScanClient(moveUrl.getProtocol(), moveUrl.getHost(), moveUrl.getPort());
+            return new MoveScanClient(moveUrl.getProtocol(), moveUrl.getHost(), moveUrl.getDefaultPort());
         } catch (MalformedURLException e) {
             logger.error("get move scan api url error:", e);
         }

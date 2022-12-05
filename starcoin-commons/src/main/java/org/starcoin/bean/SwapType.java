@@ -6,6 +6,8 @@ public enum SwapType {
     SwapTokenForExactToken("swap_token_for_exact_token"),
     RemoveLiquidity("remove_liquidity"),
     Stake("stake"),
+
+    Harvest("harvest"),
     Unknown("unknown");
     String value;
 

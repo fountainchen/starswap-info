@@ -116,7 +116,8 @@ public class SwapTransactionHandle extends QuartzJobBean {
                         if(swapType == SwapType.RemoveLiquidity) {
                             argFirst = argsArray.getBigInteger(1);
                             argSecond = argsArray.getBigInteger(2);
-                        }else if(swapType == SwapType.Stake) {
+                        }else if(swapType == SwapType.Stake || swapType == SwapType.Harvest) {
+                            //only one arg
                         }else {
                             argSecond = argsArray.getBigInteger(1);
                         }

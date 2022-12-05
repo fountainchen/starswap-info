@@ -100,9 +100,7 @@ public class SwapApiClient {
 
         try (Response response = OKClientUtils.getClient().newCall(request).execute()) {
             assert response.body() != null;
-            String res = response.body().string();
-            System.out.println(res);
-            return JSON.parseArray(res, OracleTokenPair.class);
+            return JSON.parseArray(response.body().string(), OracleTokenPair.class);
         }
     }
 
