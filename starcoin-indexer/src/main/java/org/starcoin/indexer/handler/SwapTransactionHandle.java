@@ -4,18 +4,14 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import org.elasticsearch.client.RestHighLevelClient;
+import lombok.extern.slf4j.Slf4j;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.JobExecutionContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.quartz.QuartzJobBean;
 import org.starcoin.api.StateRPCClient;
 import org.starcoin.bean.*;
-import org.starcoin.bean.Transaction;
-import org.starcoin.constant.Constant;
 import org.starcoin.constant.StarcoinNetwork;
 import org.starcoin.indexer.service.OffsetService;
 import org.starcoin.indexer.service.SwapTxnService;
@@ -34,11 +30,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 @DisallowConcurrentExecution
+@Slf4j
 public class SwapTransactionHandle extends QuartzJobBean {
 
     private static final String SWAP_TXN_OFFSET_KEY ="SWAP_TXN_";
     private static final String SWAP_MODULE ="0x8c109349c6bd91411d6bc962e080c4a3::TokenSwapFarmScript";
-    private static final Logger logger = LoggerFactory.getLogger(SwapTransactionHandle.class);
     private ObjectMapper objectMapper;
     @Value("${starcoin.network}")
     private String network;
@@ -82,22 +78,24 @@ public class SwapTransactionHandle extends QuartzJobBean {
             init();
         }
         long offset = offsetService.getOffset(network, SWAP_TXN_OFFSET_KEY + network);
-        logger.info("handle swap txn: {}", offset);
+        log.info("handle swap txn: {}", offset);
 
         try {
-            List<TransactionEntity> transactionEntityList = moveScanClient.getSwapTxn(offset, 50);
+            List<TransactionEntity> transactionEntityList = moveScanClient.getSwapTxn(offset + 1, 50);
             if (!transactionEntityList.isEmpty()) {
                 List<SwapTransaction> swapTransactionList = new ArrayList<>();
                 Map<String, BigDecimal> tokenPriceMap = new HashMap<>();
                 long globalIndex = 0;
                 for (TransactionEntity entity: transactionEntityList) {
+                    if(entity.getGlobalIndex() > globalIndex) {
+                        globalIndex = entity.getGlobalIndex();
+                    }
                     JSONObject jb = JSONObject.parseObject(entity.getPayload());
                     JSONObject scripts = jb.getJSONObject("ScriptFunction");
                     String module = String.valueOf(scripts.get("module"));
                     if(SWAP_MODULE.equals(module) ) {
                         SwapTransaction swapTransaction = new SwapTransaction();
                         List<String> tokenList = new ArrayList<>();
-                        globalIndex = entity.getGlobalIndex();
                         UserTransactionEntity userTransactionEntity = moveScanClient.getUserTxn(entity.getTxnHash());
                         if(userTransactionEntity != null) {
                             swapTransaction.setAccount(userTransactionEntity.getSender());
@@ -135,7 +133,7 @@ public class SwapTransactionHandle extends QuartzJobBean {
                             int retry = 3;
                             while (retry > 0) {
                                 //get oracle price
-                                logger.info("token price not cache, load from oracle: {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB());
+                                log.info("token price not cache, load from oracle: {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB());
                                 long priceTime = swapTransaction.getTimestamp() - 300000 * (6 - retry);
                                 List<org.starcoin.bean.OracleTokenPair> oracleTokenPairs =
                                         swapApiClient.getProximatePriceRounds(localNetwork.getValue(), tokenList, String.valueOf(priceTime));
@@ -146,7 +144,7 @@ public class SwapTransactionHandle extends QuartzJobBean {
                                         priceA = new BigDecimal(oracleTokenA.getPrice());
                                         priceA = priceA.movePointLeft(oracleTokenA.getDecimals());
                                         tokenPriceMap.put(swapTransaction.getTokenA(), priceA);
-                                        logger.info("get oracle price1 ok: {}", oracleTokenA);
+                                        log.info("get oracle price1 ok: {}", oracleTokenA);
                                     }
                                     // get tokenB price
                                     BigDecimal priceB = null;
@@ -155,7 +153,7 @@ public class SwapTransactionHandle extends QuartzJobBean {
                                         priceB = new BigDecimal(oracleTokenB.getPrice());
                                         priceB = priceB.movePointLeft(oracleTokenB.getDecimals());
                                         tokenPriceMap.put(swapTransaction.getTokenB(), priceB);
-                                        logger.info("get oracle price2 ok: {}", oracleTokenB);
+                                        log.info("get oracle price2 ok: {}", oracleTokenB);
                                     }
                                     BigDecimal zero = new BigDecimal(0);
                                     if (isSwap) {
@@ -167,7 +165,7 @@ public class SwapTransactionHandle extends QuartzJobBean {
                                             swapTransaction.setTotalValue(priceB.multiply(swapTransaction.getAmountB()));
                                             break;
                                         }
-                                        logger.warn("get oracle price null: {}, {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB(), priceTime);
+                                        log.warn("get oracle price null: {}, {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB(), priceTime);
                                         retry--;
                                     } else {
                                         // add or remove
@@ -185,13 +183,13 @@ public class SwapTransactionHandle extends QuartzJobBean {
                                                 swapTransaction.setTotalValue(priceB.multiply(swapTransaction.getAmountB()).multiply(new BigDecimal(2)));
                                                 break;
                                             } else {
-                                                logger.warn("get oracle price null: {}, {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB(), priceTime);
+                                                log.warn("get oracle price null: {}, {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB(), priceTime);
                                                 retry--;
                                             }
                                         }
                                     }
                                 } else {
-                                    logger.warn("getProximatePriceRounds null: {}, {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB(), priceTime);
+                                    log.warn("getProximatePriceRounds null: {}, {}, {}", swapTransaction.getTokenA(), swapTransaction.getTokenB(), priceTime);
                                     retry--;
                                 }
                                 try {
@@ -207,20 +205,24 @@ public class SwapTransactionHandle extends QuartzJobBean {
 
                 //save swap transaction
                 try {
-                    swapTxnService.saveList(swapTransactionList);
-                    logger.info("save swap txn ok: {}", swapTransactionList.size());
-                    //update offset
-                    offsetService.updateOffset(network, SWAP_TXN_OFFSET_KEY+ network, globalIndex);
-                    logger.info("update payload ok: {}", globalIndex);
+                    if(!swapTransactionList.isEmpty()) {
+                        swapTxnService.saveList(swapTransactionList);
+                        log.info("save swap txn ok: {}", swapTransactionList.size());
+                    }
+                    if(globalIndex > 0) {
+                        //update offset
+                        offsetService.updateOffset(network, SWAP_TXN_OFFSET_KEY+ network, globalIndex);
+                        log.info("update payload ok: {}", globalIndex);
+                    }
                 } catch (Exception e) {
-                    logger.error("save swap err:", e);
+                    log.error("save swap err:", e);
                 }
             } else {
-                logger.warn("get txn_info null");
+                log.warn("get txn list null");
             }
 
         } catch (IOException e) {
-            logger.warn("handle transaction payload error:", e);
+            log.warn("handle swap transaction error:", e);
         }
     }
 
