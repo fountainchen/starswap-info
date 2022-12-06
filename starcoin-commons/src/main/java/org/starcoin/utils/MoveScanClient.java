@@ -55,9 +55,11 @@ public class MoveScanClient {
             String res = response.body().string();
             Result result = JSON.parseObject(res, Result.class);
             List<TransactionEntity> transactionEntityList = new ArrayList<>();
-            for (Object jb: result.getContents()) {
-                TransactionEntity entity = JSON.parseObject(String.valueOf(jb), TransactionEntity.class);
-                transactionEntityList.add(entity);
+            if(request != null) {
+                for (Object jb: result.getContents()) {
+                    TransactionEntity entity = JSON.parseObject(String.valueOf(jb), TransactionEntity.class);
+                    transactionEntityList.add(entity);
+                }
             }
             return transactionEntityList;
         }
