@@ -103,11 +103,15 @@ public class SwapTransactionHandle extends QuartzJobBean {
                         swapTransaction.setTransactionHash(entity.getTxnHash());
                         swapTransaction.setTimestamp(entity.getCreateAt());
                         JSONArray typeArray = scripts.getJSONArray("ty_args");
+                        String fun = String.valueOf(scripts.get("function"));
+                        if(fun.equals("buy_back") || fun.equals("stake")) {
+                            continue;
+                        }
+                        SwapType swapType = SwapType.fromValue(fun);
                         String tokenA =  String.valueOf(typeArray.get(0));
                         String tokenB =  String.valueOf(typeArray.get(1));
                         swapTransaction.setTokenA(tokenA);
                         swapTransaction.setTokenB(tokenB);
-                        SwapType swapType = SwapType.fromValue(String.valueOf(scripts.get("function")));
                         JSONArray argsArray = scripts.getJSONArray("args");
                         BigInteger argFirst = argsArray.getBigInteger(0);
                         BigInteger argSecond = new BigInteger("0");
