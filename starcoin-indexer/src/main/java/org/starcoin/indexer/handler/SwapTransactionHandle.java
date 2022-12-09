@@ -104,7 +104,7 @@ public class SwapTransactionHandle extends QuartzJobBean {
                         swapTransaction.setTimestamp(entity.getCreateAt());
                         JSONArray typeArray = scripts.getJSONArray("ty_args");
                         String fun = String.valueOf(scripts.get("function"));
-                        if(fun.equals("buy_back") || fun.equals("stake") || fun.equals("unstake")) {
+                        if(fun.equals("buy_back") || fun.equals("stake") || fun.equals("unstake") || fun.equals("harvest")) {
                             continue;
                         }
                         SwapType swapType = SwapType.fromValue(fun);
