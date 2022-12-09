@@ -34,7 +34,7 @@ import java.util.Map;
 public class SwapTransactionHandle extends QuartzJobBean {
 
     private static final String SWAP_TXN_OFFSET_KEY ="SWAP_TXN_";
-    private static final String SWAP_MODULE ="0x8c109349c6bd91411d6bc962e080c4a3::TokenSwapFarmScript";
+    private static final String SWAP_MODULE ="0x8c109349c6bd91411d6bc962e080c4a3";
     private ObjectMapper objectMapper;
     @Value("${starcoin.network}")
     private String network;
@@ -93,7 +93,7 @@ public class SwapTransactionHandle extends QuartzJobBean {
                     JSONObject jb = JSONObject.parseObject(entity.getPayload());
                     JSONObject scripts = jb.getJSONObject("ScriptFunction");
                     String module = String.valueOf(scripts.get("module"));
-                    if(SWAP_MODULE.equals(module) ) {
+                    if(module.startsWith(SWAP_MODULE)) {
                         SwapTransaction swapTransaction = new SwapTransaction();
                         List<String> tokenList = new ArrayList<>();
                         UserTransactionEntity userTransactionEntity = moveScanClient.getUserTxn(entity.getTxnHash());
