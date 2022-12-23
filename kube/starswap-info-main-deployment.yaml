@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: starswap-info
-          image: fountainchen/starswap_info_backend:sha-30c9da0
+          image: fountainchen/starswap_info_backend:sha-83a88d2
           ports:
             - containerPort: 8300
           env:
@@ -32,7 +32,7 @@ spec:
             - name: SWAP_CONTRACT_ADDR
               value: "0x8c109349c6bd91411d6bc962e080c4a3"
             - name: DS_URL
-              value: "jdbc:postgresql://database-swap.czftx6muneg7.ap-northeast-1.rds.amazonaws.com/starcoin"
+              value: "jdbc:postgresql://starswap-info.czftx6muneg7.ap-northeast-1.rds.amazonaws.com/starcoin"
             - name: DB_USER_NAME
               value: "starcoin"
             - name: DB_PWD
